@@ -1,0 +1,77 @@
+require("dotenv").config();
+
+const { redis } = require("./utils/helper/InitRedis");
+const {
+  TOKEN_TO_CACHE,
+  TOKEN_TO_AGGREGATION_PROOF_CACHE,
+  TOKEN_TO_SYMBOL,
+} = require("./utils/constants/info");
+
+const generateAggregationProof = require("./utils/helper/GenerateAggregationProof");
+
+const express = require("express");
+const app = express();
+
+app.post("/api/update/core/updateAggregationProof", async (req, res) => {
+  const authHeader = req.headers["authorization"];
+  let { token } = req.query;
+
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).json("Unauthorized");
+  }
+
+  if (token) {
+    token = token.toLowerCase();
+
+    if (!TOKEN_TO_SYMBOL[token])
+      return res
+        .status(400)
+        .json({ status: 400, message: "ERR! Invalid token." });
+
+    const proofCache = JSON.stringify(
+      await redis.get(TOKEN_TO_AGGREGATION_PROOF_CACHE[token])
+    );
+
+    let isBase = true;
+    if (proofCache != "NULL") isBase = false;
+
+    let lastProofDefault = JSON.stringify({
+      publicInput: [],
+      publicOutput: [],
+      maxProofsVerified: 0,
+      proof: "",
+    });
+
+    const cachedData = await redis.get(TOKEN_TO_CACHE[token]);
+    const priceInfo = cachedData.prices_returned;
+
+    console.log(`\nProof creation for ${token} initialized.`);
+    const aggregationResults = await generateAggregationProof(
+      priceInfo,
+      isBase ? lastProofDefault : proofCache,
+      isBase
+    );
+
+    await redis.set(
+      TOKEN_TO_AGGREGATION_PROOF_CACHE[token],
+      JSON.stringify(aggregationResults[0])
+    );
+    console.log("Created successfully.\n");
+
+    return res.status(200).json({
+      message: "Created Proof Successfully!",
+      data: {
+        proof: aggregationResults[0],
+        selfAggregationResult: cachedData.price,
+      },
+      status: true,
+      token: token,
+    });
+  } else
+    return res
+      .status(400)
+      .json({ status: 400, message: "ERR! Query parameter missing(token)." });
+});
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`Server running on port ${port}`));
