@@ -4,7 +4,8 @@
   "description": "AWS Instance to handle CPU Intensive tasks",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --watch 'utils/**/*.ts' --watch 'index.js' --exec 'ts-node' index.js"
+    "dev": "nodemon --watch 'utils/**/*.ts' --watch 'index.js' --exec 'ts-node' index.js",
+    "start": "node index.js"
   },
   "author": "br0wnD3v",
   "license": "ISC",
